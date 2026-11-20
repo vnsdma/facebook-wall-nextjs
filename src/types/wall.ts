@@ -4,6 +4,7 @@ export interface WallPost {
   body: string;
   created_at: string;
   likes_count?: number;
+  image_url?: string | null;
 }
 
 export interface WallProfile {

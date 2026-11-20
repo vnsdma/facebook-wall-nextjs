@@ -12,10 +12,18 @@ import { SupabaseSetupBanner } from '../components/SupabaseSetupBanner';
 
 const DEFAULT_POSTS: WallPost[] = [
   {
+    id: 'seed-photo-1',
+    author_name: 'Mark Zuckerberg',
+    body: 'Just launched photo uploads for our new Facebook Wall! Attach photos directly to any post.',
+    created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    likes_count: 9,
+    image_url: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80',
+  },
+  {
     id: 'seed-1',
     author_name: 'Dustin Moskovitz',
     body: 'Hey Mark, server cluster in San Jose is running smoothly. Ready to push the update.',
-    created_at: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+    created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
     likes_count: 3,
   },
   {
@@ -28,7 +36,7 @@ const DEFAULT_POSTS: WallPost[] = [
   {
     id: 'seed-3',
     author_name: 'Chris Hughes',
-    body: 'Welcome to my new Wall! Leave a message or write something here.',
+    body: 'Welcome to my new Wall! Leave a message or share a photo here.',
     created_at: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
     likes_count: 5,
   },
@@ -40,7 +48,7 @@ export default function FacebookWallPage() {
   const [isPosting, setIsPosting] = useState(false);
   const [isRealtimeActive, setIsRealtimeActive] = useState(false);
   const [activeTab, setActiveTab] = useState('wall');
-  const [userStatus, setUserStatus] = useState('is building apps on the quad.');
+  const [userStatus, setUserStatus] = useState('is building photo uploads on the quad.');
   const [isEditingStatus, setIsEditingStatus] = useState(false);
   const [statusInput, setStatusInput] = useState(userStatus);
 
@@ -55,14 +63,14 @@ export default function FacebookWallPage() {
           .order('created_at', { ascending: false })
           .limit(50);
 
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
           setPosts(data as WallPost[]);
           return;
         }
       }
 
       // Fallback: Local storage
-      const saved = localStorage.getItem('fb_wall_posts_v1');
+      const saved = localStorage.getItem('fb_wall_posts_v2');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
@@ -77,7 +85,7 @@ export default function FacebookWallPage() {
 
       // Seed default initial posts
       setPosts(DEFAULT_POSTS);
-      localStorage.setItem('fb_wall_posts_v1', JSON.stringify(DEFAULT_POSTS));
+      localStorage.setItem('fb_wall_posts_v2', JSON.stringify(DEFAULT_POSTS));
     } finally {
       setIsLoading(false);
     }
@@ -129,22 +137,58 @@ export default function FacebookWallPage() {
     };
   }, []);
 
-  // Handle post creation
-  const handleCreatePost = async (body: string, authorName: string): Promise<boolean> => {
+  // Handle post creation with optional photo
+  const handleCreatePost = async (
+    body: string,
+    authorName: string,
+    imageUrl?: string | null
+  ): Promise<boolean> => {
     setIsPosting(true);
+    const postBody = body.trim() || (imageUrl ? 'Shared a photo' : '');
+
     try {
       if (isSupabaseConfigured && supabase) {
+        const insertPayload: Record<string, unknown> = {
+          body: postBody,
+          author_name: authorName,
+        };
+        if (imageUrl) {
+          insertPayload.image_url = imageUrl;
+        }
+
         const { data, error } = await supabase
           .from('posts')
-          .insert({
-            body,
-            author_name: authorName,
-          })
+          .insert(insertPayload)
           .select()
           .single();
 
         if (error) {
-          console.error('Supabase insert error:', error);
+          console.warn('Supabase insert failed:', error.message);
+
+          // If image_url column doesn't exist yet on DB, fallback without image_url
+          if (error.code === 'PGRST204' || error.message.includes('image_url')) {
+            const fallbackInsert = await supabase
+              .from('posts')
+              .insert({
+                body: postBody,
+                author_name: authorName,
+              })
+              .select()
+              .single();
+
+            if (!fallbackInsert.error && fallbackInsert.data) {
+              const enrichedPost: WallPost = {
+                ...(fallbackInsert.data as WallPost),
+                image_url: imageUrl,
+              };
+              setPosts((prev) => [enrichedPost, ...prev]);
+              alert(
+                'Post saved! Note: Run the SQL migration in Supabase to add the "image_url" column and "wall-photos" storage bucket.'
+              );
+              return true;
+            }
+          }
+
           alert(`Failed to save to Supabase: ${error.message}`);
           return false;
         }
@@ -162,14 +206,15 @@ export default function FacebookWallPage() {
       const newPost: WallPost = {
         id: `local-${Date.now()}`,
         author_name: authorName,
-        body,
+        body: postBody,
+        image_url: imageUrl || undefined,
         created_at: new Date().toISOString(),
         likes_count: 0,
       };
 
       const updated = [newPost, ...posts];
       setPosts(updated);
-      localStorage.setItem('fb_wall_posts_v1', JSON.stringify(updated));
+      localStorage.setItem('fb_wall_posts_v2', JSON.stringify(updated));
       return true;
     } finally {
       setIsPosting(false);
@@ -188,7 +233,7 @@ export default function FacebookWallPage() {
 
     setPosts((prev) => {
       const updated = prev.filter((p) => p.id !== id);
-      localStorage.setItem('fb_wall_posts_v1', JSON.stringify(updated));
+      localStorage.setItem('fb_wall_posts_v2', JSON.stringify(updated));
       return updated;
     });
   };
@@ -224,28 +269,33 @@ export default function FacebookWallPage() {
                       setUserStatus(statusInput);
                       setIsEditingStatus(false);
                     }}
-                    className="flex items-center gap-1.5"
+                    className="inline-flex items-center gap-1.5"
                   >
                     <input
                       type="text"
                       value={statusInput}
                       onChange={(e) => setStatusInput(e.target.value)}
-                      className="text-xs px-1.5 py-0.5 border border-[#bdc7d8] focus:outline-none"
+                      className="text-xs px-2 py-0.5 border border-[#3b5998] focus:outline-none bg-white"
+                      maxLength={80}
+                      autoFocus
                     />
-                    <button type="submit" className="fb-btn-primary text-[10px] py-0.5 px-2">
+                    <button
+                      type="submit"
+                      className="text-[11px] bg-[#3b5998] text-white px-2 py-0.5 font-bold hover:bg-[#2f477a]"
+                    >
                       Save
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsEditingStatus(false)}
-                      className="text-[10px] text-gray-500 hover:underline"
+                      className="text-[11px] text-gray-500 hover:underline"
                     >
                       Cancel
                     </button>
                   </form>
                 ) : (
                   <span className="text-xs text-gray-600 italic">
-                    {userStatus}{' '}
+                    {userStatus}
                     <button
                       type="button"
                       onClick={() => {
@@ -299,7 +349,7 @@ export default function FacebookWallPage() {
                     {activeTab.toUpperCase()} Section
                   </p>
                   <p>
-                    Switch back to the <strong className="text-[#3b5998] cursor-pointer" onClick={() => setActiveTab('wall')}>Wall tab</strong> to test posting and live updates!
+                    Switch back to the <strong className="text-[#3b5998] cursor-pointer" onClick={() => setActiveTab('wall')}>Wall tab</strong> to test posting, photo uploads, and live updates!
                   </p>
                 </div>
               )}
