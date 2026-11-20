@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --fb-blue: #3b5998;
+  --fb-dark-blue: #2f477a;
+  --fb-header-blue: #6d84b4;
+  --fb-border: #d8dfea;
+  --fb-bg: #f7f7f7;
+}
+
+body {
+  background-color: var(--fb-bg);
+  color: #333333;
+  font-family: Tahoma, Verdana, Arial, "Lucida Grande", sans-serif;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0;
+}
+
+/* Classic 2008 Facebook Button */
+.fb-btn-primary {
+  background-color: #3b5998;
+  border: 1px solid #29447e;
+  border-bottom-color: #1a356e;
+  color: #ffffff;
+  font-family: "Lucida Grande", Tahoma, Verdana, Arial, sans-serif;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 3px 12px;
+  cursor: pointer;
+  border-radius: 0;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+}
+
+.fb-btn-primary:hover:not(:disabled) {
+  background-color: #4c67a1;
+  border-color: #29447e;
+}
+
+.fb-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fb-btn-secondary {
+  background-color: #eceff5;
+  border: 1px solid #96a6c5;
+  color: #3b5998;
+  font-family: "Lucida Grande", Tahoma, Verdana, Arial, sans-serif;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.fb-btn-secondary:hover {
+  background-color: #d8dfea;
+  border-color: #6d84b4;
+}
+
+/* Links */
+a {
+  color: #3b5998;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
